@@ -1,7 +1,7 @@
 A collection of useful command line tools
 =========================================
 
-by Andrew Brampton 2009-2012
+by [Andrew Brampton](http://bramp.net) 2009-2012
 
 <https://github.com/bramp/handy-tools>
 
