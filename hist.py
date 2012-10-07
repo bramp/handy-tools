@@ -10,6 +10,7 @@ from collections import defaultdict
 from itertools import *
 from math import *
 from _hist import *
+import getopt
 
 def summary_print(hist):
 	keys = sorted(hist.keys())
@@ -62,7 +63,63 @@ def summary_print(hist):
 		median=p50, p90=p90, p95=p95, p99=p99)
 
 
-def main(f, bins = 10, min = None, max = None):
+#def _main(f, bins = 10, min = None, max = None):
+
+#f = open(filename, 'r')
+#for line in f:
+#    process(line)
+#f.close()
+
+def usage():
+	print "Usage: %s [--bins=<n>|--limits=<a,b,c>|--auto=[ss|fd]]" % sys.argv[0]
+	print ""
+	print "For example:"
+	print "  cat data | %s --bins 10" % sys.argv[0]
+
+def main():
+        try:
+		opts, args = getopt.getopt(sys.argv[1:], "h", ["help", "bins=", "limits=", "auto="])
+
+        except getopt.GetoptError, err:
+                # print help information and exit:
+		raise
+
+	f = sys.stdin
+
+	auto = None
+	limits = None
+	bins = None
+	binning_count = 0
+	for o, a in opts:
+		if o in ("-h", "--help"):
+			usage()
+			sys.exit()
+
+		elif o == "--bins":
+			binning_count += 1
+			bins = int(a)
+			if bins < 1:
+				raise ValueError("bins must be greater than 1")
+				
+		elif o == "--limits":
+			binning_count += 1
+
+			limits = a
+		elif o == "--auto":
+			binning_count += 1
+
+			if a is not None and a not in ("ss", "fd"):
+				raise ValueError("'%s' is not a valid algorithm" % a)
+
+			auto = a
+		else:
+			assert False, "unhandled option"
+
+	if binning_count > 1:
+		raise ValueError("only one of --bin, --limit, --auto may be specified")
+	elif binning_count == 0:
+		auto = "ss"
+
 	raw = defaultdict(int)
 	for line in f:
 		try:
@@ -74,15 +131,30 @@ def main(f, bins = 10, min = None, max = None):
 			continue
 
 	if len(raw) > 0:
-		hist = hist_ss(raw)
+		if auto is not None:
+			if auto == "ss":
+				hist = hist_ss(raw)
+			elif auto == "fd":
+				hist = hist_fd(raw)
+			else:
+				assert False, "unhandled auto '%s'" % auto
+
+		elif bins is not None:
+			hist = hist_dict(raw, bins)
+
+		elif limits is not None:
+			raise "Not implements"
+
 		hist_print(hist)
 		summary_print(raw)
 
-#f = open(filename, 'r')
-#for line in f:
-#    process(line)
-#f.close()
 
 if __name__ == "__main__":
-	f = sys.stdin
-	main(f)
+	try:
+		main()
+	except ValueError, err:
+                print str(err) # will print something like "option -a not recognized"
+                usage()
+                sys.exit(2)
+		
+	main()
