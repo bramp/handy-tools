@@ -14,6 +14,8 @@ import dateutil
 import svgwrite
 from brewer2mpl import sequential
 from _hist import *
+import getopt
+
 
 def main(f, bins = 10, min_ = None, max_ = None):
 	raw    = defaultdict(int)
@@ -22,35 +24,34 @@ def main(f, bins = 10, min_ = None, max_ = None):
 
 	for line in f:
 		line = line.strip()
-		if len(line) == 0:
+		if len(line) == 0: # Skip empty lines
 			continue
 
 		data = line.rsplit(None, 1)
 		if len(data) != 2:
-			print >> sys.stderr, "invalid line '{err}'".format(err=line)
+			print >> sys.stderr, "line does not contain two values '{err}'".format(err=line)
 			continue
 
 		try:
-			date = dateutil.parser.parse(data[0])
-			#print date
+			# TODO Accept simple numeric values
+			x = dateutil.parser.parse(data[0], fuzzy=True)
 
 		except ValueError:
-			print >> sys.stderr, "invalid date '{err}'".format(err=data[0])
+			print >> sys.stderr, "invalid x value '{err}'".format(err=data[0])
 			continue
 
-			#print
 		try:
-			x = float(data[1])
+			y = float(data[1])
 		except ValueError:
-			print >> sys.stderr, "invalid value '{err}'".format(err=data[1])
+			print >> sys.stderr, "invalid y value '{err}'".format(err=data[1])
 			continue
 
-		values [ x ] += 1
-		dates  [ date ] += 1
-		raw    [ (date, x) ] += 1
+		values [ y ] += 1
+		dates  [ x ] += 1
+		raw    [ (y, x) ] += 1
 
 	dates_N = 20
-	values_N = 10
+	values_N = 20
 
 	if len(raw) > 0:
 		# Now bin the dates
@@ -59,37 +60,30 @@ def main(f, bins = 10, min_ = None, max_ = None):
 		dates_hist  = hist_ss(dates)
 		values_hist = hist_ss(values)
 
-		limits = sorted(values_hist.keys())
+		grid_max = 0
 
-		first_filter = lambda x: x[0][0] <= max_
-		other_filter = lambda x: x[0][0] > min_ and x[0][0] <= max_
+		limits = sorted(dates_hist.keys())
+		first_filter = lambda x: x[0][0] <= y_max
+		other_filter = lambda x: x[0][0] > y_min and x[0][0] <= y_max
+
 		current_filter = first_filter
 
-		hist_2d = dict()
-		for max_, dates_count in sorted(dates_hist.items()):
+		# Now filter the raw data into a 2D hist
+		hist_2d = dict() # [y][x]
+		for y_max, values_count in sorted(values_hist.items()):
 
+			# Find all values within y_min and y_max
 			h = defaultdict(int)
 			for k,v in filter(current_filter, raw.iteritems()):
 				h[ k[1] ] += v
 			current_filter = other_filter
 
-#			if first:
-#				h = defaultdict()
-#				#h = dict((k[1],v) for k,v in filter(lambda k, v: k[0] <= max_, raw.iteritems())# if k[0] <= max_)
-#				for k,v in raw.iteritems():
-#					if k[0] <= max_: h[k[1]] += v	
-#				first = False
-#			else:
-#				#h = dict((k[1],v) for k,v in raw.iteritems() if k[0] > min_ and k[0] <= max_)
-#				h = defaultdict()
-#				for k,v in raw.iteritems():
-#					if k[0] > min_ and k[0] <= max_: h[k[1]] += v	
+			assert sum_values(h) == values_count, "filtered list contains wrong number of values %d vs %d" % (len(h), values_count)
 
-			new_dates_count = reduce(lambda x,y: x + y, h.itervalues())
-			assert new_dates_count == dates_count, "filtered list contains wrong number of values %d vs %d" % (len(h), dates_count)
-
-			hist_2d[ max_ ] = hist_dict(h, limits = limits)
-			min_ = max_
+			hist_2d[ y_max ] = d = hist_dict(h, limits = limits)
+			if len(h) > 0:
+				grid_max = max(grid_max, max(d.values()) * y_max)
+			y_min = y_max
 
 
 		svg = svgwrite.Drawing('test.svg', profile='full')
@@ -99,46 +93,56 @@ def main(f, bins = 10, min_ = None, max_ = None):
 		box_width  = 24
 		box_height = 14
 
-		colors = sequential.Blues[9].hex_colors
+		quantiles = 9
+		colors = sequential.Blues[quantiles].hex_colors
 
 		dx = 100
 		x = 0
 		y = 0
 
-		# Draw label
+		# Draw label - TODO CSS class!
 		label_style = "text-anchor: end; dominant-baseline: central; font-size: 11px; font-family: sans-serif;"
 
-		for k in values_hist.keys():
-			y += box_height
-			svg.add( svg.text( k, insert=(dx - 5, y - box_height / 2), style=label_style ) )
-
-		# Draw main grid
-		x = 0
-		for date, counts in sorted(hist_2d.items()):
-			y = 0
-			for k, v in sorted(counts.items(), reverse=True):
-				#c = bisect_left(limits, k)
-				c = (v * 9) / 1000
+		y = 0
+		for k in sorted(values_hist.keys(), reverse=True):
+			x = 0
+			svg.add( svg.text( k, insert=(dx - 5, y + box_height / 2), style=label_style ) )
+			row = hist_2d[k]
+			row_max = max(row.values()) if len(row) > 0 else 1
+			for date in sorted(dates_hist.keys()): # for each col
+				v = row[ date ]
+				#c = (v * (quantiles - 1)) / row_max # max on this row
+				c = int( (v * k * (quantiles - 1)) / grid_max) # max on this grid
+				#print v, k, v*k, grid_max
+				assert c < len(colors), "Invalid color"
 				r = svg.rect((x + dx,y), (box_width, box_height), fill = colors[c], stroke = "white")
 				r.set_desc( v )
 				svg.add( r )
 
-				y += box_height
-			x += box_width
+				x += box_width
+			y += box_height
+			print k, row
 
-			print date, counts
+
+		# Draw main grid
+		#x = 0
+		#for k, counts in sorted(hist_2d.items(), reverse=True): # for each row (in that col)
+		#	y = 0
+			#max_ = max(counts.values())
+			#max_ = 1000
 
 		svg.save()
 
-#		hist = hist_ss(raw)
-#		hist_print(hist)
-#		summary_print(raw)
-
-#f = open(filename, 'r')
-#for line in f:
-#    process(line)
-#f.close()
+def usage():
+	print "Usage: %s [--(x|y)bins=<n>]" % sys.argv[0]
 
 if __name__ == "__main__":
+
+	try:
+		opts, args = getopt.getopt(sys.argv[1:], "h", ["help", "xbins=", "ybins="])
+	except getopt.GetoptError, err:
+		# print help information and exit:
+		raise
+
 	f = sys.stdin
 	main(f)
