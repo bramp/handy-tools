@@ -42,8 +42,19 @@ def hist_quantiles(data, N=10):
 	return hist_dict(data, limits=sorted(set(qs.values())))
 
 def hist_fd(data):
-	"""TODO Use Freedman-Diaconis' choice"""
-	pass
+	"""Use Freedman-Diaconis' choice"""
+	qs = quantiles(data, [0, 0.25, 0.75, 1])
+	print qs
+	iqr = qs[0.75] - qs[0.25]
+	range = qs[1] - qs[0]
+	n = sum_values(data)
+	return hist_dict(data, N = int(range / (2*iqr / math.pow(n, 1/3))))
+
+def hist_sr(data):
+	"""Use Square-root choice"""
+	return hist_dict(data, N=int(math.sqrt(len(data))))
+	#return hist_dict(data, N=int( math.sqrt( sum_values(data) )))
+
 
 def hist_ss(data):
 	"""Optimal bin sizing using the Shimazaki and Shinomoto algorithm

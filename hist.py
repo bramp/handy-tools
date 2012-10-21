@@ -50,8 +50,13 @@ def summary_print(hist):
 #f.close()
 
 def usage():
-	print "Usage: %s [--bins=<n>|--limits=<a,b,c>|--auto=[ss|fd]]" % sys.argv[0]
-	print ""
+	print "Usage: %s [--bins=n|--limits=a,b,c|--auto=[fs|nq|ss|sr]]" % sys.argv[0]
+	print "  --auto Determine the bins using one of the following algorithms:"
+	print "      fd - Freedman-Diaconis' choice [default]"
+	print "      nq - n quantiles"
+	print "      ss - Shimazaki and Shinomoto"   # Good for time data
+	print "      sr - Square-root choice"        # It's what Excel uses
+	print
 	print "For example:"
 	print "  cat data | %s --bins 10" % sys.argv[0]
 
@@ -87,17 +92,23 @@ def main():
 		elif o == "--auto":
 			binning_count += 1
 
-			if a is not None and a not in ("ss", "fd"):
+			if a is not None and a not in ("ss", "sr", "fd", "nq"):
 				raise ValueError("'%s' is not a valid algorithm" % a)
+
+			if a == "nq":
+				binning_count -= 1
 
 			auto = a
 		else:
 			assert False, "unhandled option"
 
+	if auto == "nq" and bins is None:
+		raise ValueError("bins must be specified when using 'nq'")
+
 	if binning_count > 1:
 		raise ValueError("only one of --bin, --limit, --auto may be specified")
 	elif binning_count == 0:
-		auto = "ss"
+		auto = "fd" # Default is FD
 
 	raw = defaultdict(int)
 	for line in f:
@@ -113,8 +124,12 @@ def main():
 		if auto is not None:
 			if auto == "ss":
 				hist = hist_ss(raw)
+			elif auto == "sr":
+				hist = hist_sr(raw)
 			elif auto == "fd":
 				hist = hist_fd(raw)
+			elif auto == "nq":
+				hist = hist_quantiles(raw, bins)
 			else:
 				assert False, "unhandled auto '%s'" % auto
 
