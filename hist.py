@@ -4,6 +4,9 @@
 # Generates a summary of the distribution of the data
 # by Andrew Brampton
 #
+# TODO
+#  Add a min/max for the binnings
+#  Finish the limits code
 
 import sys
 from collections import defaultdict
@@ -147,7 +150,8 @@ if __name__ == "__main__":
 	try:
 		main()
 	except ValueError, err:
-                print str(err) # will print something like "option -a not recognized"
+                print "Error: " + str(err) # will print something like "option -a not recognized"
+                print
                 usage()
                 sys.exit(2)
 		

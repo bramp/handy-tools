@@ -80,7 +80,7 @@ def hist_ss(data):
 
 	best_C = float("inf")
 	best_bin = None
-	for N in xrange(2,15): # Try values between 2 and 30
+	for N in xrange(2,30): # Try values between 2 and 30
 		width = diff / float(N)
 
 		bins = hist_dict(data, N)
@@ -95,7 +95,7 @@ def hist_ss(data):
 
 def hist_dict(data, N = None, limits = None):
 	"""Places the data into N bins. We assume the data is a dict of X=>count pairs
-	   returns a dict of size N with (upper limit => count)
+	   returns a dict of size N with tuples (upper limit => count)
 	"""
 
 	if len(data) == 0:
@@ -108,11 +108,17 @@ def hist_dict(data, N = None, limits = None):
 		if N is None:
 			raise ValueError("either N or limit must be set")
 
+		if type(N) is not int:
+			raise ValueError("N must be an integer")
+
 		min_ = keys[0]
 		max_ = keys[-1]
 
-		diff = max_ - min_
-		limits = [min_ + i * diff / N for i in range(1, N + 1)]
+		range = max_ - min_
+		limits = [min_ + range * (float(i) / (N-1)) for i in range(0, N)]
+
+		assert limits[0] == min_,  "Limit 0 must be min_ %f %f %r" % (limits[0], min_, limits)
+		assert limits[-1] == max_, "Limit -1 must be max_ %f %f %r" % (limits[-1], max_, limits)
 	elif N is None:
 		N = len(limits)
 		if N < 2:
