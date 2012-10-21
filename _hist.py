@@ -8,7 +8,38 @@
 import sys
 from collections import defaultdict
 from itertools import *
-from math import *
+import math
+
+def sum_values(data):
+	return reduce(lambda x,y: x + y, data.itervalues(), 0)
+
+def quantiles(data, qs):
+	"""Returns a map of quantiles to value for the quantils in qs"""
+
+	N = sum_values(data)
+	qs = sorted(set(qs))
+	qs = dict( zip(qs, map(lambda x: x * N, qs)) )
+
+	start = 0
+	results = dict()
+	for k, count in sorted(data.items()):
+		end = start + count
+
+		# TODO We could shortcircut this loop (if we sort it and do some logic)
+		for q, qN in qs.items():
+			if qN >= start and qN <= end:
+				results[q] = k
+				del qs[q]
+
+		start = end
+
+	assert len(qs) == 0, "quantiles() has unfound quantiles %r" % qs
+
+	return results
+
+def hist_quantiles(data, N=10):
+	qs = quantiles(data, [float(x) / N for x in range(0, N + 1)])
+	return hist_dict(data, limits=sorted(set(qs.values())))
 
 def hist_fd(data):
 	"""TODO Use Freedman-Diaconis' choice"""

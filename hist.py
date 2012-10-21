@@ -33,34 +33,13 @@ def summary_print(hist):
 	variance = (sum2 - (sum*sum) / N) / N
 
 	# We calculate the 90/95/99 percentiles. We use actual values, but perhaps we should interpolate
-	c50 = N * 0.5
-	c90 = N * 0.90
-	c95 = N * 0.95
-	c99 = N * 0.99
-
-	p50 = None; p90 = None; p95 = None; p99 = None;
-
-	start = 0
-	for k in keys:
-		count = hist[k]
-		end   = start + count
-
-		if c50 > start and c50 <= end:
-			p50 = k
-		if c90 > start and c90 <= end:
-			p90 = k
-		if c95 > start and c95 <= end:
-			p95 = k
-		if c99 > start and c99 <= end:
-			p99 = k
-
-		start += count
+	qs = quantiles(hist, [0.5, 0.90, 0.95, 0.99])
 
 	# Print useful stats at the end
 	print "# N: {N}, min: {min}, max: {max}, mean: {mean:0.4f}, var: {variance:0.4f}".format(
 		N=N, min=smallest_key, max=largest_key, mean=mean, variance=variance)
 	print "# median: {median}, 90%: {p90}, 95%: {p95}, 99%: {p99}".format(
-		median=p50, p90=p90, p95=p95, p99=p99)
+		median=qs[0.5], p90=qs[0.9], p95=qs[0.95], p99=qs[0.99])
 
 
 #def _main(f, bins = 10, min = None, max = None):
