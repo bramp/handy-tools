@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # 
 # Generic functions for creating histograms
@@ -6,12 +6,19 @@
 #
 
 import sys
+import math
 from collections import defaultdict
 from itertools import *
-import math
+from functools import reduce
+
+def round_to_sf(x, n):
+	"""TODO Make this work. Round to n significant digits"""
+	if n < 1:
+		raise ValueError("number of significant digits must be >= 1")
+	return "%.*f" % (n-1, x)
 
 def sum_values(data):
-	return reduce(lambda x,y: x + y, data.itervalues(), 0)
+	return reduce(lambda x,y: x + y, data.values(), 0)
 
 def quantiles(data, qs):
 	"""Returns a map of quantiles to value for the quantils in qs"""
@@ -30,6 +37,7 @@ def quantiles(data, qs):
 			if qN >= start and qN <= end:
 				results[q] = k
 				del qs[q]
+				break
 
 		start = end
 
@@ -44,11 +52,10 @@ def hist_quantiles(data, N=10):
 def hist_fd(data):
 	"""Use Freedman-Diaconis' choice"""
 	qs = quantiles(data, [0, 0.25, 0.75, 1])
-	print qs
 	iqr = qs[0.75] - qs[0.25]
-	range = qs[1] - qs[0]
+	r = qs[1] - qs[0]
 	n = sum_values(data)
-	return hist_dict(data, N = int(range / (2*iqr / math.pow(n, 1/3))))
+	return hist_dict(data, N = int(r / (2*iqr / math.pow(n, 1/3))))
 
 def hist_sr(data):
 	"""Use Square-root choice"""
@@ -80,7 +87,7 @@ def hist_ss(data):
 
 	best_C = float("inf")
 	best_bin = None
-	for N in xrange(2,30): # Try values between 2 and 30
+	for N in range(2,30): # Try values between 2 and 30
 		width = diff / float(N)
 
 		bins = hist_dict(data, N)
@@ -114,12 +121,14 @@ def hist_dict(data, N = None, limits = None):
 		min_ = keys[0]
 		max_ = keys[-1]
 
-		range = max_ - min_
-		limits = [min_ + range * (float(i) / (N-1)) for i in range(0, N)]
+		r = max_ - min_
+		limits = [min_ + r * (float(i) / (N-1)) for i in range(1, N)]
+		#limits = [min_ + ((r * i) // (N-1)) for i in range(0, N)]
 
-		assert limits[0] == min_,  "Limit 0 must be min_ %f %f %r" % (limits[0], min_, limits)
+		#assert limits[0] == min_,  "Limit 0 must be min_ %f %f %r" % (limits[0], min_, limits)
 		assert limits[-1] == max_, "Limit -1 must be max_ %f %f %r" % (limits[-1], max_, limits)
 	elif N is None:
+		limits = list(limits) # Ensure we have a list
 		N = len(limits)
 		if N < 2:
 			raise ValueError("limits must have atleast 2 elements")
@@ -130,14 +139,18 @@ def hist_dict(data, N = None, limits = None):
 
 	# Assume keys is sorted
 	i = 0
-	for k in keys:
-		# Skip to the correct bin
-		while k > limits[i]:
-			i+=1
+	try:
+		for k in keys:
+			# Skip to the correct bin
+			while k > limits[i]:
+				i+=1
 
-		bins[ i ] += data[k]
+			bins[ i ] += data[k]
 
-	return dict( zip ( limits, bins.itervalues() ) )
+	except IndexError:
+		pass # on the case where i goes past limits
+
+	return dict( zip ( limits, bins.values() ) )
 
 def hist_print(hist, weight = False, logarithmic = False, width = 80):
 	"""Prints a ASCII histogram"""
@@ -164,7 +177,7 @@ def hist_print(hist, weight = False, logarithmic = False, width = 80):
 	if logarithmic:
 		largest_count = log(largest_count)
 
-	print "<=".rjust(key_width) + " " + "distibution".center(stars_width) +  " " + "count".center(count_width)
+	print("<=".rjust(key_width) + " " + "distibution".center(stars_width) +  " " + "count".center(count_width))
 
 	n = 0
 	for k in keys:
@@ -180,9 +193,9 @@ def hist_print(hist, weight = False, logarithmic = False, width = 80):
 
 		stars = '*' * int( (count / largest_count) * stars_width )
 
-		print "{key:>{key_width}.2f} {stars:<{stars_width}s} {count:{count_width}d}".format(
+		print("{key:>{key_width}.2f} {stars:<{stars_width}s} {count:{count_width}d}".format(
 			key=k, key_width=key_width,
 			stars=stars, stars_width = stars_width,
-			count=hist[k], count_width = count_width )
+			count=hist[k], count_width = count_width ))
 
 		n += hist[k]

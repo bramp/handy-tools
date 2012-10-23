@@ -1,21 +1,23 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # 
 # Generates a summary of the distribution of the data
 # by Andrew Brampton
 #
-
 import sys
+import getopt
+import svgwrite
+
 from collections import defaultdict
 from itertools import *
 from math import *
-import dateutil.parser
-import dateutil
-import svgwrite
 from brewer2mpl import sequential
-from _hist import *
-import getopt
 
+#from dateutil.parser import *
+import dateutil
+import dateutil.parser
+
+from _hist import *
 
 def main(f, bins = 10, min_ = None, max_ = None):
 	raw    = defaultdict(int)
@@ -29,7 +31,7 @@ def main(f, bins = 10, min_ = None, max_ = None):
 
 		data = line.rsplit(None, 1)
 		if len(data) != 2:
-			print >> sys.stderr, "line does not contain two values '{err}'".format(err=line)
+			print("line does not contain two values '{err}'".format(err=line), file=sys.stderr)
 			continue
 
 		try:
@@ -37,28 +39,32 @@ def main(f, bins = 10, min_ = None, max_ = None):
 			x = dateutil.parser.parse(data[0], fuzzy=True)
 
 		except ValueError:
-			print >> sys.stderr, "invalid x value '{err}'".format(err=data[0])
+			print("invalid x value '{err}'".format(err=data[0]), file=sys.stderr)
 			continue
 
 		try:
 			y = float(data[1])
 		except ValueError:
-			print >> sys.stderr, "invalid y value '{err}'".format(err=data[1])
+			print("invalid y value '{err}'".format(err=data[1]), file=sys.stderr)
 			continue
 
 		values [ y ] += 1
 		dates  [ x ] += 1
 		raw    [ (y, x) ] += 1
 
-	dates_N = 20
+	dates_N = 40
 	values_N = 20
 
 	if len(raw) > 0:
 		# Now bin the dates
-		#dates_hist  = hist_dict(dates, N = dates_N)
+		dates_hist  = hist_dict(dates, N = dates_N)
+
 		#values_hist = hist_dict(values, N = values_N)
-		dates_hist  = hist_ss(dates)
-		values_hist = hist_ss(values)
+		values_hist = hist_dict(values, limits = map(lambda x: math.pow(1.3,x-3), range(20)))
+		#values_hist = hist_quantiles(values, N = values_N)
+
+		#dates_hist  = hist_ss(dates)
+		#values_hist = hist_ss(values)
 
 		grid_max = 0
 
@@ -74,7 +80,7 @@ def main(f, bins = 10, min_ = None, max_ = None):
 
 			# Find all values within y_min and y_max
 			h = defaultdict(int)
-			for k,v in filter(current_filter, raw.iteritems()):
+			for k,v in filter(current_filter, raw.items()):
 				h[ k[1] ] += v
 			current_filter = other_filter
 
@@ -96,32 +102,51 @@ def main(f, bins = 10, min_ = None, max_ = None):
 		quantiles = 9
 		colors = sequential.Blues[quantiles].hex_colors
 
-		dx = 100
+		dy = 0
+		dx = 50
 		x = 0
 		y = 0
 
 		# Draw label - TODO CSS class!
-		label_style = "text-anchor: end; dominant-baseline: central; font-size: 11px; font-family: sans-serif;"
+		xlabel_style = "text-anchor: end; dominant-baseline: central; font-size: 11px; font-family: sans-serif;"
+		ylabel_style = "text-anchor: end; dominant-baseline: central; font-size: 11px; font-family: sans-serif;"
 
-		y = 0
+		sorted_dates = sorted(dates_hist.keys())
+
+		for x, date in enumerate(sorted_dates): # for each col
+			date = date.replace(second=0, microsecond=0)
+			p = (dx + x * box_width + box_width/2, dy + len(values_hist) * box_height)
+			svg.add( svg.text( date, insert=p, style=ylabel_style, transform="rotate(-90, %d,%d)" % p ) )
+
+		y = dy
 		for k in sorted(values_hist.keys(), reverse=True):
-			x = 0
-			svg.add( svg.text( k, insert=(dx - 5, y + box_height / 2), style=label_style ) )
+			x = dx
+			svg.add( svg.text( round_to_sf(k,3), insert=(x - 5, y + box_height / 2), style=xlabel_style ) )
 			row = hist_2d[k]
 			row_max = max(row.values()) if len(row) > 0 else 1
-			for date in sorted(dates_hist.keys()): # for each col
+			if row_max == 0:
+				row_max = 1
+
+			for date in sorted_dates: # for each col
 				v = row[ date ]
-				#c = (v * (quantiles - 1)) / row_max # max on this row
-				c = int( (v * k * (quantiles - 1)) / grid_max) # max on this grid
-				#print v, k, v*k, grid_max
+				#c = int( (v * k * (quantiles - 1)) / grid_max) # max on this grid
+
+				m = list(map(lambda k: hist_2d[k][date], values_hist.keys()))
+				col_max = max( m ) if len(m) > 0 else 1
+				if col_max == 0:
+					col_max = 1
+
+				#c = int( (v * (quantiles - 1)) / row_max) # max on this row
+				c = int( (v * (quantiles - 1)) / col_max) # max on this row
+				
 				assert c < len(colors), "Invalid color"
-				r = svg.rect((x + dx,y), (box_width, box_height), fill = colors[c], stroke = "white")
+				r = svg.rect((x,y), (box_width, box_height), fill = colors[c], stroke = "white")
 				r.set_desc( v )
 				svg.add( r )
 
 				x += box_width
 			y += box_height
-			print k, row
+			print(k, row)
 
 
 		# Draw main grid
@@ -134,13 +159,13 @@ def main(f, bins = 10, min_ = None, max_ = None):
 		svg.save()
 
 def usage():
-	print "Usage: %s [--(x|y)bins=<n>]" % sys.argv[0]
+	print("Usage: %s [--(x|y)bins=<n>]" % sys.argv[0])
 
 if __name__ == "__main__":
 
 	try:
 		opts, args = getopt.getopt(sys.argv[1:], "h", ["help", "xbins=", "ybins="])
-	except getopt.GetoptError, err:
+	except getopt.GetoptError as err:
 		# print help information and exit:
 		raise
 
