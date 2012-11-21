@@ -33,11 +33,10 @@ def quantiles(data, qs):
 		end = start + count
 
 		# TODO We could shortcircut this loop (if we sort it and do some logic)
-		for q, qN in qs.items():
-			if qN >= start and qN <= end:
+		for q, qN in list(qs.items()):
+			if start <= qN and qN <= end:
 				results[q] = k
 				del qs[q]
-				break
 
 		start = end
 
