@@ -16,13 +16,27 @@ from brewer2mpl import sequential
 #from dateutil.parser import *
 import dateutil
 import dateutil.parser
+import datetime
 
 from _hist import *
+
+def parseDateOrFloat(x):
+	try:
+		# Try a Date
+		return dateutil.parser.parse(x, fuzzy=True)
+
+	except ValueError:
+		# Then a try a simple float
+		return float(x);
+
+
 
 def main(f, bins = 10, min_ = None, max_ = None):
 	raw    = defaultdict(int)
 	dates  = defaultdict(int)
 	values = defaultdict(int)
+	firstLine = True
+	useDates = False
 
 	for line in f:
 		line = line.strip()
@@ -35,8 +49,17 @@ def main(f, bins = 10, min_ = None, max_ = None):
 			continue
 
 		try:
-			# TODO Accept simple numeric values
-			x = dateutil.parser.parse(data[0], fuzzy=True)
+
+			# For the first non-invalid line, we test if it's a date or not
+			if firstLine:
+				x = parseDateOrFloat(data[0]);
+				useDates = isinstance(x, datetime.date);
+				firstLine = False;
+
+			if useDates:
+				x = dateutil.parser.parse(data[0], fuzzy=True)
+			else:
+				x = float(data[0])
 
 		except ValueError:
 			print("invalid x value '{err}'".format(err=data[0]), file=sys.stderr)
@@ -114,7 +137,11 @@ def main(f, bins = 10, min_ = None, max_ = None):
 		sorted_dates = sorted(dates_hist.keys())
 
 		for x, date in enumerate(sorted_dates): # for each col
-			date = date.replace(second=0, microsecond=0)
+			if useDates:
+				date = date.replace(second=0, microsecond=0)
+			else:
+				date = round_to_sf(date, 3)
+
 			p = (dx + x * box_width + box_width/2, dy + len(values_hist) * box_height)
 			svg.add( svg.text( date, insert=p, style=ylabel_style, transform="rotate(-90, %d,%d)" % p ) )
 
